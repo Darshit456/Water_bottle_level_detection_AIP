@@ -35,9 +35,9 @@ from config import CACHE_DIR, LABELS_CSV, MODELS_DIR, RESULTS_DIR
 from data import IMG_HEIGHT, IMG_WIDTH, SCALE, BottleDataset, eval_transform, train_transform
 
 # ---------- Settings (change these for new experiments) ----------
-RUN_NAME = "resnet18_v2"       # name for the saved model and the log
+RUN_NAME = "resnet18_v3"       # name for the saved model and the log
 MODEL_NAME = "resnet18"
-EPOCHS = 15                    # how many times the model sees all training photos
+EPOCHS = 30                    # how many times the model sees all training photos
 BATCH_SIZE = 16                # photos per weight update
 LEARNING_RATE = 1e-4           # how big each weight change is (0.0001)
 SEED = 42                      # same seed -> (almost) same result every run
@@ -194,9 +194,9 @@ def main():
     print(f"\nBest epoch: {best_epoch}")
     print(f"  Baseline  : test MAE {baseline:6.1f} g")
     print(f"  ResNet-18 : test MAE {best_mae:6.1f} g")
-    print("\nPer bottle (test level):")
-    for b, g in test_df.groupby("bottle_id"):
-        print(f"  {b}: true {g['water_g'].iloc[0]:4d} g | mean prediction {g['pred_g'].mean():6.1f} g"
+    print("\nPer bottle and test level:")
+    for (b, w), g in test_df.groupby(["bottle_id", "water_g"]):
+        print(f"  {b}: true {w:4d} g | mean prediction {g['pred_g'].mean():6.1f} g"
               f" | MAE {g['error_g'].mean():5.1f} g | {len(g)} photos")
 
     plot_learning_curve(history, baseline)
