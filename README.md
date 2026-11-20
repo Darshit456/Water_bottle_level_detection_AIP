@@ -25,14 +25,14 @@ The professor provides a separate **validation set** (40 photos with the true wa
 
 | Step | Stage | Status |
 | :---: | :--- | :---: |
-| – | 📸 Dataset collection | 🟡 In progress (0–258 g + full) |
+| – | 📸 Dataset collection | 🟡 14 levels per bottle; upper range of A, B, C still missing |
 | – | 🏷️ Data labeling (`labels.csv`) | ✅ Done |
 | 1 | 🖼️ Image preparation (rotation + resizing) | ✅ Done |
 | 2 | 🔢 Data pipeline (tensors, augmentation, DataLoader) | ✅ Done |
 | 3 | 🔍 Model inspection (ResNet-18 layers, filters, feature maps) | ✅ Done |
-| 4 | 🧠 Model training (first model `resnet18_v1`) | ✅ Done |
-| 5 | 📊 Evaluation on the professor's validation set | ✅ Done (v1) |
-| – | 📸 Missing levels (258 g → full) + model v2 | ⚪ Next |
+| 4 | 🧠 Model training | ✅ Done (v1, v2, v3) |
+| 5 | 📊 Evaluation on the professor's validation set | ✅ Done (v1, v2, v3) |
+| 6 | ✂️ Crop the bottle with YOLO, then train v4 | ⚪ Next |
 
 ---
 
@@ -49,9 +49,16 @@ Photos of **4 bottles**, each filled with a known amount of water (weighed on a 
 
 **Current state**
 
-- 📷 **1180 photos**, 8 fill levels per bottle: empty, 5–6 levels between ~10 g and ~258 g, and full (up to the company's fill line)
-- 💡 Different backgrounds, lighting, angles and distances
-- 🔀 Train / test split **by fill level** (all photos of one level stay together): 1069 train, 111 test
+- 📷 **2298 photos**, **14 fill levels per bottle**, from empty to full (full = up to the company's fill line)
+- 💡 Different backgrounds, lighting, angles and distances (mostly one university lab, newer photos in more varied places)
+- 🔀 Train / test split **by fill level** (all photos of one level stay together): **1901 train, 397 test** (2 test levels per bottle, ~140 g and ~310 g)
+
+| Bottle | Photos | Levels | Range | Biggest gap (still missing) |
+| :---: | :---: | :---: | :---: | :--- |
+| A | 437 | 14 | 0–1000 g | 493 g (507 → 1000 g) |
+| B | 837 | 14 | 0–700 g | 181 g (519 → 700 g) |
+| C | 648 | 14 | 0–750 g | 207 g (543 → 750 g) |
+| D | 376 | 14 | 0–505 g | 89 g (11 → 100 g) |
 
 **Folder structure** (stored outside the repository, path set in `src/config.py`):
 
@@ -80,7 +87,7 @@ photo → upright + resize → augmentation (train only) → tensor → normalis
 - **Transfer learning:** ResNet-18 pretrained on ImageNet (via `timm`), last layer replaced by **one output** (water in grams ÷ 1000)
 - **Input:** 384 × 288 px (portrait), normalised with ImageNet mean/std
 - **Augmentation:** horizontal flip, rotation ±8°, colour jitter (never vertical flip)
-- **Training:** L1 loss (= MAE), AdamW, learning rate 1e-4, batch size 16, 15 epochs, all layers fine-tuned
+- **Training:** L1 loss (= MAE), AdamW, learning rate 1e-4, batch size 16, 15–30 epochs, all layers fine-tuned; the epoch with the lowest test MAE is kept
 - **Metric:** MAE (mean absolute error) in grams
 
 ---
@@ -93,59 +100,65 @@ photo → upright + resize → augmentation (train only) → tensor → normalis
 | `src/step1_prepare_images.py` | Applies the phone's EXIF rotation and saves small copies (max 512 px) in a cache folder |
 | `src/step2_check_data.py` | Shows how one photo becomes a tensor, saves an augmentation preview, checks one batch |
 | `src/step3_look_at_model.py` | Lists the ResNet-18 parts, traces the tensor shape through every layer, shows first-layer filters and feature maps |
-| `src/step4_train.py` | Trains the model, saves the best weights, plots, and logs the run in `results/experiments.csv` |
+| `src/step4_train.py` | Trains the model, saves the best weights, plots, prints results per bottle and level, and logs the run in `results/experiments.csv` |
 | `src/step5_evaluate.py` | Tests a saved model on the professor's validation photos, compares with baselines, saves best/worst examples and logs to `results/validation_log.csv` |
 | `src/data.py` | Shared data code: photo loading, transforms and `BottleDataset` (used by steps 2–5) |
 | `src/config.py` | All paths in one place |
 
 ---
 
-## 📊 First Results (`resnet18_v1`, test split)
+## 🧪 Experiments
 
-| Method | Test MAE |
-| :--- | :---: |
-| Always guess 244 g (train mean) | 98.3 g |
-| Always guess 217 g (train median) | 71.6 g |
-| **ResNet-18 (best epoch 10)** | **56.9 g** |
+Each experiment changes **one thing**, so we know what caused the difference. `RUN_NAME` in `step4_train.py` and `step5_evaluate.py` names the run.
 
-| Bottle | True level | Mean prediction | MAE |
-| :---: | :---: | :---: | :---: |
-| A | 138 g | 123.4 g | 58.6 g |
-| B | 153 g | 126.5 g | 63.4 g |
-| C | 150 g | 149.8 g | 43.1 g |
-| D | 138 g | 137.2 g | 57.5 g |
+| Run | What changed | Train / test photos | Epochs | Best epoch |
+| :---: | :--- | :---: | :---: | :---: |
+| v1 | First model, data 0–258 g + full | 1069 / 111 | 15 | 10 |
+| v2 | **More data** (14 levels per bottle) | 1901 / 397 | 15 | 13 |
+| v3 | **Train longer** (same data as v2) | 1901 / 397 | 30 | 28 |
 
-**What this tells us**
+---
 
-- ✅ The full pipeline works end-to-end and the model beats the "no-photo" baselines
-- ⚠️ The test split has only **one level per bottle** (138–153 g), so the test MAE is a weak estimate
-- ⚠️ Predictions are correct **on average** per bottle but scatter a lot between single photos
-- ⚠️ No training data between ~258 g and full yet, so larger amounts cannot be predicted well
+## 📊 Results on Our Test Split
+
+| Run | Baseline (always guess the train mean) | ResNet-18 |
+| :---: | :---: | :---: |
+| v1 | 98.3 g | **56.9 g** |
+| v2 | 48.6 g | 68.9 g |
+| v3 | 48.6 g | 59.6 g |
+
+> ⚠️ v1 cannot be compared with v2/v3: the test split changed when new levels were added. v2 and v3 use the **same** 397 test photos.
+
+- v3 is ~9 g better than v2, but on our own test photos the model is **still worse than a constant guess**
+- Predictions vary a lot between photos of the **same bottle and level** (spread of 50–97 g)
+- v3 learning curve: train MAE kept falling (to 47.5 g) while test MAE stopped improving after ~15 epochs → start of **overfitting**
 
 Plots: `results/step4_learning_curve.png`, `results/step4_test_scatter.png`, `results/step4_test_examples.png`
 
 ---
 
-## 🎯 Validation Results (`resnet18_v1`, professor's 40 photos)
+## 🎯 Validation Results (professor's 40 photos)
 
-The validation photos were taken by the professor in other places, so they show how the model works on **truly new** photos. Results are split at 250 g, because our training data only goes up to ~258 g (plus full bottles).
+The validation photos were taken by the professor in other places, so they show how the model works on **truly new** photos. Results are split at 250 g.
 
-| Method | All (40) | ≤ 250 g (15) | > 250 g (25) |
-| :--- | :---: | :---: | :---: |
-| Always guess 244 g (train mean) | 233.7 g | 148.8 g | 284.7 g |
-| Always guess 217 g (train median) | 240.4 g | 122.1 g | 311.4 g |
-| **ResNet-18 v1** | **266.7 g** | **93.5 g** | **370.5 g** |
+| Run | All (40) | ≤ 250 g (15) | > 250 g (25) | Lowest / highest prediction |
+| :---: | :---: | :---: | :---: | :---: |
+| Baseline v1 (always 244 g) | 233.7 g | 148.8 g | 284.7 g | – |
+| Baseline v2/v3 (always 311 g) | 219.7 g | 215.7 g | 222.1 g | – |
+| **v1** | 266.7 g | **93.5 g** | 370.5 g | 0 / 403 g |
+| **v2** | **151.0 g** | 173.1 g | **137.7 g** | 92 / 588 g |
+| **v3** | 154.2 g | 141.1 g | 162.1 g | 79 / 613 g |
 
-**What this tells us**
+**What we learned**
 
-- ✅ **≤ 250 g (training range):** the model beats both baselines on new photos; some predictions are very close (189 → 187 g, 4 → 0 g, 100 → 109 g)
-- ⚠️ **But unreliable:** median error 59 g, with some large misses (137 → 403 g)
-- ❌ **> 250 g (no training data):** worse than a constant guess; the model never predicts more than ~400 g
-- ❌ The worst errors are nearly full bottles predicted as nearly empty (588 → 51 g, 585 → 43 g): clear water and air look similar, and the model has never seen waterlines in the upper half
+- ✅ **More data was the biggest lever:** v1 → v2 reduced the validation error by **43 %**, and the model can now predict high weights (585 → 587 g, 549 → 531 g)
+- ➖ **Training longer did not help:** v2 and v3 are about equal on validation (a few grams on 40 photos is noise)
+- ⚠️ **Predictions are squeezed towards the middle:** nearly empty bottles are predicted too high (4 → 306 g in v2), nearly full ones too low (926 → 587 g)
+- ⚠️ 13 of the 40 validation photos are above 519 g, the range where A, B and C still have no training levels
 
-**Main causes:** missing fill levels between 258 g and full (62 % of the validation photos are in this range), transparent water making full and empty look alike, and L1 loss pulling uncertain predictions towards the middle of the training range.
+**Likely causes:** the bottle is often **tiny in the photo** (after resizing the waterline is only a few pixels), transparent water makes full and empty look alike, missing high levels, and L1 loss pulls uncertain predictions towards the middle.
 
-Plots: `results/step5_validation_scatter_resnet18_v1.png`, `results/step5_best_worst_resnet18_v1.png`
+Plots: `results/step5_validation_scatter_<run>.png`, `results/step5_best_worst_<run>.png`
 
 ---
 
@@ -198,10 +211,10 @@ Water_bottle_level_detection_AIP/
 
 ## 🔜 Next Steps
 
-- 📸 Capture the missing fill levels (258 g → full): steps of ~30–50 g, 5–10 photos per level at 4–5 different places
-- 🔁 Retrain as `resnet18_v2` and compare with v1 on the test split and the validation set
-- ✂️ Crop the bottle with a pretrained YOLO detector before training
+- ✂️ **Step 6:** crop the bottle with a pretrained YOLO detector so it fills the whole input image, then train **v4** on the same data as v2/v3 and compare
+- 📸 Capture the missing high levels: A 507 → 1000 g (~9 levels), B 519 → 700 g (~3), C 543 → 750 g (~3), at 4–5 different places per level
 - 🔥 Grad-CAM heatmaps to show where the model looks
+- 📝 Report and presentation
 
 ---
 
