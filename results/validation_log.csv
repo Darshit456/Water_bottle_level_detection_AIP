@@ -1,0 +1,2 @@
+date,run,val_mae_all,val_mae_low,val_mae_high,baseline_mean_all
+2026-11-20 22:10,resnet18_v1,266.7,93.5,370.5,233.7
