@@ -26,7 +26,7 @@ from config import LABELS_CSV, MODELS_DIR, RESULTS_DIR, VAL_DIR
 from data import SCALE, eval_transform, load_photo
 
 # ---------- Settings ----------
-RUN_NAME = "resnet18_v1"       # which saved model to evaluate (models/<RUN_NAME>.pt)
+RUN_NAME = "resnet18_v2"       # which saved model to evaluate (models/<RUN_NAME>.pt)
 MODEL_NAME = "resnet18"
 SPLIT_AT_G = 250               # our training photos only go up to ~250 g (+ full)
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"

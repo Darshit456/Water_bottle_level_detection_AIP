@@ -35,7 +35,7 @@ from config import CACHE_DIR, LABELS_CSV, MODELS_DIR, RESULTS_DIR
 from data import IMG_HEIGHT, IMG_WIDTH, SCALE, BottleDataset, eval_transform, train_transform
 
 # ---------- Settings (change these for new experiments) ----------
-RUN_NAME = "resnet18_v1"       # name for the saved model and the log
+RUN_NAME = "resnet18_v2"       # name for the saved model and the log
 MODEL_NAME = "resnet18"
 EPOCHS = 15                    # how many times the model sees all training photos
 BATCH_SIZE = 16                # photos per weight update
